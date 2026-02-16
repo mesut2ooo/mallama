@@ -118,6 +118,18 @@ def save_conversation():
     if not data:
         return jsonify({'error': 'No data'}), 400
 
+    # Use provided name or generate from messages
+    if 'name' not in data:
+        messages = data.get('messages', [])
+        first_user_msg = next((m for m in messages if m.get('role') == 'user'), None)
+        if first_user_msg:
+            content = first_user_msg.get('content', '')
+            name = content[:30] + '...' if len(content) > 30 else content
+            name = name.replace('\n', ' ').strip()
+            data['name'] = name or 'New Chat'
+        else:
+            data['name'] = 'New Chat'
+    
     filename = f"conv_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.json"
     filepath = os.path.join(app.config['CONVERSATIONS_FOLDER'], filename)
     with open(filepath, 'w') as f:

@@ -124,13 +124,28 @@ async function loadConversations() {
     const res = await fetch('/conversations');
     const files = await res.json();
     conversationsList.innerHTML = '';
-    files.forEach(f => {
+    
+    for (const f of files) {
         const div = document.createElement('div');
         div.className = 'conversation-item';
-        div.textContent = f;
+        
+        // Try to load the conversation to get its name
+        try {
+            const convRes = await fetch('/load', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: f})
+            });
+            const conv = await convRes.json();
+            div.textContent = conv.name || generateChatName(conv.messages || []) || f;
+        } catch (e) {
+            // Fallback to filename
+            div.textContent = f.replace(/^conv_|\.json$/g, '').replace(/_/g, ' ');
+        }
+        
         div.addEventListener('click', () => loadConversation(f));
         conversationsList.appendChild(div);
-    });
+    }
 }
 
 // Load a specific conversation
@@ -143,21 +158,57 @@ async function loadConversation(filename) {
     const conv = await res.json();
     messages = conv.messages || [];
     systemPrompt = conv.system || '';
-    // Restore UI
+    temperature = conv.temperature ?? temperature;
+    topP = conv.topP ?? topP;
+    maxTokens = conv.maxTokens ?? maxTokens;
+    
+    // Update UI
     renderMessages();
     systemTextarea.value = systemPrompt;
+    tempSlider.value = temperature;
+    tempSpan.textContent = temperature.toFixed(1);
+    topPSlider.value = topP;
+    topPSpan.textContent = topP.toFixed(2);
+    maxTokensInput.value = maxTokens;
+}
+
+// Generate a chat name from the first user message
+function generateChatName(messages) {
+    // Find the first user message
+    const firstUserMsg = messages.find(msg => msg.role === 'user');
+    if (!firstUserMsg) return 'New Chat';
+    
+    const content = firstUserMsg.content.trim();
+    if (!content) return 'New Chat';
+    
+    // Take first 30 characters, add ellipsis if longer
+    let name = content.length > 30 ? content.substring(0, 30) + '...' : content;
+    
+    // Remove newlines and extra spaces
+    name = name.replace(/\s+/g, ' ').trim();
+    
+    // Add timestamp for uniqueness
+    const now = new Date();
+    const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    return `${name} (${timestamp})`;
 }
 
 // Save current conversation
 async function saveConversation() {
+    // Don't save empty conversations
+    if (messages.length === 0) return;
+    
     const conv = {
         messages,
         system: systemPrompt,
         model: currentModel,
         temperature,
         topP,
-        maxTokens
+        maxTokens,
+        name: generateChatName(messages) // Add a name field
     };
+    
     await fetch('/save', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -532,8 +583,6 @@ async function handleFiles(files) {
 newChatBtn.addEventListener('click', () => {
     messages = [];
     renderMessages();
-    systemPrompt = '';
-    systemTextarea.value = '';
     userInput.value = '';
 });
 
