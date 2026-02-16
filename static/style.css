@@ -1,0 +1,333 @@
+/* static/style.css */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+    background: #1a1a1a;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Glassmorphism base */
+.app {
+    display: flex;
+    height: 100vh;
+    background: radial-gradient(circle at 20% 20%, #2a2a2a, #0a0a0a);
+    backdrop-filter: blur(10px);
+    color: #e0e0e0;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background: rgba(30, 30, 30, 0.5);
+    backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.new-chat {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 0.8rem;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.new-chat:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.conversations-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.conversation-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 0.6rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: 0.2s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Main panel */
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(20, 20, 20, 0.4);
+    backdrop-filter: blur(8px);
+}
+
+/* Top bar */
+.top-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(30, 30, 30, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-wrap: wrap;
+}
+
+.model-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    min-width: 150px;
+}
+
+.param-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: #ccc;
+}
+
+.param-control input[type=range] {
+    width: 100px;
+    background: transparent;
+}
+
+.param-control input[type=number] {
+    width: 80px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    padding: 0.3rem;
+    border-radius: 6px;
+}
+
+.top-bar button {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.top-bar button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Chat area */
+.chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+.messages {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.message {
+    display: flex;
+    max-width: 80%;
+}
+
+.message.user {
+    align-self: flex-end;
+}
+
+.message.assistant {
+    align-self: flex-start;
+}
+
+.message-content {
+    padding: 0.8rem 1.2rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    line-height: 1.5;
+}
+
+.message.user .message-content {
+    background: rgba(0, 120, 255, 0.2);
+    border-color: rgba(0, 120, 255, 0.3);
+}
+
+.message-content pre {
+    background: rgba(0,0,0,0.4);
+    padding: 0.8rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+    position: relative;
+}
+
+.message-content code {
+    font-family: 'Fira Code', monospace;
+    font-size: 0.9rem;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.7rem;
+}
+
+/* Input area */
+.input-area {
+    padding: 1.5rem;
+    display: flex;
+    gap: 0.8rem;
+    background: rgba(30, 30, 30, 0.6);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.input-area textarea {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 24px;
+    padding: 0.8rem 1.2rem;
+    color: white;
+    font-size: 1rem;
+    resize: none;
+    min-height: 40px;
+    max-height: 150px;
+    outline: none;
+}
+
+.input-area textarea:focus {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.send-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.send-btn.stop {
+    background: rgba(255, 80, 80, 0.3);
+    border-color: rgba(255, 80, 80, 0.5);
+}
+
+.send-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    background: rgba(30,30,30,0.9);
+    margin: 10% auto;
+    padding: 2rem;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    width: 500px;
+    max-width: 90%;
+    color: white;
+}
+
+.modal-content h3 {
+    margin-bottom: 1rem;
+}
+
+.modal-content textarea {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    padding: 0.8rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.close, .close-upload {
+    float: right;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.drop-zone {
+    border: 2px dashed rgba(255,255,255,0.3);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    margin: 1rem 0;
+    cursor: pointer;
+}
+
+.file-previews {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.preview-item {
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.preview-item img {
+    max-width: 40px;
+    max-height: 40px;
+    border-radius: 4px;
+}
