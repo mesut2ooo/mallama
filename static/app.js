@@ -187,11 +187,7 @@ function generateChatName(messages) {
     // Remove newlines and extra spaces
     name = name.replace(/\s+/g, ' ').trim();
     
-    // Add timestamp for uniqueness
-    const now = new Date();
-    const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
-    return `${name} (${timestamp})`;
+    return name;
 }
 
 // Save current conversation
