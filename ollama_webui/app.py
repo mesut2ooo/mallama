@@ -7,9 +7,16 @@ from flask import Flask, render_template, request, Response, jsonify, abort
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['CONVERSATIONS_FOLDER'] = 'conversations'
+# Get the directory where this file is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(__name__,
+           template_folder=os.path.join(BASE_DIR, 'templates'),
+           static_folder=os.path.join(BASE_DIR, 'static'))
+
+# Use user directory for data storage
+app.config['UPLOAD_FOLDER'] = os.path.expanduser("~/.ollama-webui/uploads")
+app.config['CONVERSATIONS_FOLDER'] = os.path.expanduser("~/.ollama-webui/conversations")
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB limit
 
 # Ensure directories exist
@@ -105,10 +112,8 @@ def chat():
     return Response(generate(), mimetype='text/event-stream')
 
 # Route: stop generation (client-side abort only)
-# No server-side action needed as we rely on connection close
 @app.route('/stop', methods=['POST'])
 def stop():
-    # This endpoint is just for client to signal; we return 200
     return jsonify({'status': 'stopped'})
 
 # Route: save conversation
@@ -118,7 +123,6 @@ def save_conversation():
     if not data:
         return jsonify({'error': 'No data'}), 400
 
-    # Use provided name or generate from messages
     if 'name' not in data:
         messages = data.get('messages', [])
         first_user_msg = next((m for m in messages if m.get('role') == 'user'), None)
@@ -167,7 +171,6 @@ def upload_file():
         return jsonify({'error': 'No selected file'}), 400
     if file:
         filename = secure_filename(file.filename)
-        # Add unique prefix to avoid overwrites
         unique_name = f"{uuid.uuid4().hex}_{filename}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
         file.save(filepath)
@@ -198,6 +201,3 @@ def delete_all_conversations():
         return jsonify({'status': 'all deleted'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
