@@ -42,10 +42,12 @@ mallama
 ```
 
 Requirements
+
     Python 3.8+
     Ollama installed and running locally (http://localhost:11434)
 
 Usage
+
     Make sure Ollama is running with at least one model pulled
     Start the web UI: mallama
     Open http://localhost:5000 in your browser
