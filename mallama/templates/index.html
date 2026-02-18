@@ -588,6 +588,77 @@
             backdrop-filter: blur(3px);
         }
 
+        /* Custom glass popup */
+        .custom-popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .custom-popup {
+            background: rgba(25, 30, 45, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 32px;
+            padding: 28px 32px;
+            max-width: 400px;
+            width: 90%;
+            color: #f0f4ff;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            animation: popupFade 0.2s ease;
+        }
+
+        @keyframes popupFade {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .custom-popup p {
+            font-size: 1.1rem;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .popup-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .popup-btn {
+            padding: 12px 24px;
+            border-radius: 40px;
+            border: none;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.1s;
+            background: rgba(255,255,255,0.05);
+            color: #e0e8ff;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .popup-btn.confirm {
+            background: #3860d0;
+            color: white;
+        }
+
+        .popup-btn.confirm:hover {
+            background: #4a7aff;
+        }
+
+        .popup-btn.cancel:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
         /* mobile adjustments */
         @media (max-width: 700px) {
             body {
@@ -741,6 +812,17 @@
     </div>
 </div>
 
+<!-- Custom Popup -->
+<div class="custom-popup-overlay" id="customPopupOverlay">
+    <div class="custom-popup">
+        <p id="popupMessage">Are you sure?</p>
+        <div class="popup-buttons">
+            <button class="popup-btn cancel" id="popupCancel">Cancel</button>
+            <button class="popup-btn confirm" id="popupConfirm">Delete</button>
+        </div>
+    </div>
+</div>
+
 <script>
     (function() {
         // ------ globals ------
@@ -785,6 +867,45 @@
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const filePreviews = document.getElementById('filePreviews');
+
+        // Custom popup function
+        function showConfirm(message) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('customPopupOverlay');
+                const popupMessage = document.getElementById('popupMessage');
+                const confirmBtn = document.getElementById('popupConfirm');
+                const cancelBtn = document.getElementById('popupCancel');
+                
+                popupMessage.textContent = message;
+                overlay.style.display = 'flex';
+                
+                const cleanup = () => {
+                    overlay.style.display = 'none';
+                    confirmBtn.removeEventListener('click', confirmHandler);
+                    cancelBtn.removeEventListener('click', cancelHandler);
+                };
+                
+                const confirmHandler = () => {
+                    cleanup();
+                    resolve(true);
+                };
+                
+                const cancelHandler = () => {
+                    cleanup();
+                    resolve(false);
+                };
+                
+                confirmBtn.addEventListener('click', confirmHandler);
+                cancelBtn.addEventListener('click', cancelHandler);
+                
+                // Click outside to cancel
+                overlay.addEventListener('click', function(e) {
+                    if (e.target === overlay) {
+                        cancelHandler();
+                    }
+                });
+            });
+        }
 
         // Load saved settings from localStorage
         function loadSettings() {
@@ -1092,7 +1213,8 @@
 
         // Delete conversation
         async function deleteConversation(filename) {
-            if (!confirm('Delete this conversation?')) return;
+            const confirmed = await showConfirm('Delete ALL conversations? This cannot be undone.');
+            if (!confirmed) return;
             
             try {
                 await fetch('/delete', {
@@ -1114,7 +1236,8 @@
 
         // Delete all conversations
         async function deleteAllConversations() {
-            if (!confirm('Delete ALL conversations?')) return;
+            const confirmed = await showConfirm('Delete ALL conversations? This cannot be undone.');
+            if (!confirmed) return;
             
             try {
                 await fetch('/delete-all', { method: 'POST' });

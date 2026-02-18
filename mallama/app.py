@@ -95,25 +95,42 @@ def chat():
                 if r.status_code != 200:
                     yield f"data: ERROR: {r.status_code}\n\n"
                     return
+                
                 for line in r.iter_lines():
                     if line:
                         try:
                             chunk = json.loads(line)
                             if 'response' in chunk:
-                                yield f"data: {json.dumps({'token': chunk['response']})}\n\n"
+                                try:
+                                    yield f"data: {json.dumps({'token': chunk['response']})}\n\n"
+                                except GeneratorExit:
+                                    # Client disconnected - clean up and exit
+                                    return
                             if chunk.get('done', False):
-                                yield f"data: [DONE]\n\n"
+                                try:
+                                    yield f"data: [DONE]\n\n"
+                                except GeneratorExit:
+                                    pass
                                 return
                         except:
                             continue
         except Exception as e:
-            yield f"data: ERROR: {str(e)}\n\n"
+            try:
+                yield f"data: ERROR: {str(e)}\n\n"
+            except GeneratorExit:
+                pass
 
-    return Response(generate(), mimetype='text/event-stream')
+    response = Response(generate(), mimetype='text/event-stream')
+    # Add these headers to prevent caching and handle disconnections
+    response.headers['X-Accel-Buffering'] = 'no'
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    return response
 
 # Route: stop generation (client-side abort only)
 @app.route('/stop', methods=['POST'])
 def stop():
+    # Just acknowledge the stop request
     return jsonify({'status': 'stopped'})
 
 # Route: save conversation
