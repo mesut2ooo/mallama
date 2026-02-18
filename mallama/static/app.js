@@ -1,47 +1,89 @@
-// static/app.js
-// State
+
+// ------ globals ------
 let messages = [];
 let currentModel = '';
-let temperature = 0.7;
-let topP = 0.9;
-let maxTokens = 2048; // Default 2K
-let systemPrompt = '';
-let uploadedFiles = [];
+let models = [];
+let conversationsList = [];
 let isGenerating = false;
 let abortController = null;
+let uploadedFiles = [];
 
-// DOM elements
-const modelSelect = document.getElementById('model-select');
+// Settings
+let systemPrompt = '';
+let temperature = 0.7;
+let topP = 0.9;
+let maxTokens = 2048;
+
+// UI elements
+const sidebar = document.getElementById('sidebar');
+const burger = document.getElementById('burgerBtn');
+const modelSelect = document.getElementById('modelSelect');
+const messagesContainer = document.getElementById('messagesContainer');
+const messageInput = document.getElementById('messageInput');
+const sendStopBtn = document.getElementById('sendStopBtn');
+const sendIcon = document.getElementById('sendIcon');
+const stopIcon = document.getElementById('stopIcon');
+const newChatBtn = document.getElementById('newChatBtn');
+const historyList = document.getElementById('historyList');
+const settingsBtn = document.getElementById('settingsBtn');
+const deleteAllBtn = document.getElementById('deleteAllBtn');
+const settingsModal = document.getElementById('settingsModal');
+const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+const systemPromptArea = document.getElementById('systemPrompt');
 const tempSlider = document.getElementById('temperature');
-const tempSpan = document.getElementById('temp-value');
-const topPSlider = document.getElementById('top-p');
-const topPSpan = document.getElementById('topp-value');
-const maxTokensInput = document.getElementById('max-tokens');
-const systemBtn = document.getElementById('system-prompt-btn');
-const uploadBtn = document.getElementById('upload-btn');
-const sendBtn = document.getElementById('send-btn');
-const userInput = document.getElementById('user-input');
-const messagesDiv = document.getElementById('messages');
-const conversationsList = document.getElementById('conversations-list');
-const newChatBtn = document.getElementById('new-chat');
+const tempValue = document.getElementById('tempValue');
+const topPSlider = document.getElementById('topP');
+const topPValue = document.getElementById('topPValue');
+const maxTokensSelect = document.getElementById('maxTokens');
+const fileUpload = document.getElementById('fileUpload');
+const uploadModal = document.getElementById('uploadModal');
+const closeUploadBtn = document.getElementById('closeUploadBtn');
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const filePreviews = document.getElementById('filePreviews');
 
-// Modals
-const systemModal = document.getElementById('system-modal');
-const systemClose = systemModal.querySelector('.close');
-const systemTextarea = document.getElementById('system-prompt-text');
-const saveSystemBtn = document.getElementById('save-system');
-
-const uploadModal = document.getElementById('upload-modal');
-const uploadClose = uploadModal.querySelector('.close-upload');
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
-const filePreviews = document.getElementById('file-previews');
-
-// static/app.js - Add after the state declarations
+// Custom popup function
+function showConfirm(message) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('customPopupOverlay');
+        const popupMessage = document.getElementById('popupMessage');
+        const confirmBtn = document.getElementById('popupConfirm');
+        const cancelBtn = document.getElementById('popupCancel');
+        
+        popupMessage.textContent = message;
+        overlay.style.display = 'flex';
+        
+        const cleanup = () => {
+            overlay.style.display = 'none';
+            confirmBtn.removeEventListener('click', confirmHandler);
+            cancelBtn.removeEventListener('click', cancelHandler);
+        };
+        
+        const confirmHandler = () => {
+            cleanup();
+            resolve(true);
+        };
+        
+        const cancelHandler = () => {
+            cleanup();
+            resolve(false);
+        };
+        
+        confirmBtn.addEventListener('click', confirmHandler);
+        cancelBtn.addEventListener('click', cancelHandler);
+        
+        // Click outside to cancel
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) {
+                cancelHandler();
+            }
+        });
+    });
+}
 
 // Load saved settings from localStorage
 function loadSettings() {
-    const savedSettings = localStorage.getItem('ollamaSettings');
+    const savedSettings = localStorage.getItem('mallamaSettings');
     if (savedSettings) {
         try {
             const settings = JSON.parse(savedSettings);
@@ -52,11 +94,11 @@ function loadSettings() {
             
             // Update UI elements
             tempSlider.value = temperature;
-            tempSpan.textContent = temperature.toFixed(1);
+            tempValue.textContent = temperature.toFixed(1);
             topPSlider.value = topP;
-            topPSpan.textContent = topP.toFixed(2);
-            maxTokensInput.value = maxTokens;
-            systemTextarea.value = systemPrompt;
+            topPValue.textContent = topP.toFixed(2);
+            maxTokensSelect.value = maxTokens;
+            systemPromptArea.value = systemPrompt;
         } catch (e) {
             console.error('Failed to load settings', e);
         }
@@ -71,172 +113,254 @@ function saveSettings() {
         maxTokens,
         systemPrompt
     };
-    localStorage.setItem('ollamaSettings', JSON.stringify(settings));
-}
-
-// Update existing event listeners to save settings
-tempSlider.addEventListener('input', () => {
-    temperature = parseFloat(tempSlider.value);
-    tempSpan.textContent = temperature.toFixed(1);
-    saveSettings();
-});
-
-topPSlider.addEventListener('input', () => {
-    topP = parseFloat(topPSlider.value);
-    topPSpan.textContent = topP.toFixed(2);
-    saveSettings();
-});
-
-maxTokensInput.addEventListener('change', (e) => {
-    maxTokens = parseInt(e.target.value, 10);
-    saveSettings();
-});
-
-saveSystemBtn.addEventListener('click', () => {
-    systemPrompt = systemTextarea.value;
-    systemModal.style.display = 'none';
-    saveSettings();
-});
-
-// Load models on startup
-async function loadModels() {
-    try {
-        const res = await fetch('/models');
-        const models = await res.json();
-        modelSelect.innerHTML = '';
-        models.forEach(m => {
-            const option = document.createElement('option');
-            option.value = m;
-            option.textContent = m;
-            modelSelect.appendChild(option);
-        });
-        if (models.length > 0) {
-            currentModel = models[0];
-            modelSelect.value = currentModel;
-        }
-    } catch (e) {
-        console.error('Failed to load models', e);
-    }
-}
-
-// Load conversations list
-async function loadConversations() {
-    const res = await fetch('/conversations');
-    const files = await res.json();
-    conversationsList.innerHTML = '';
-    
-    for (const f of files) {
-        const div = document.createElement('div');
-        div.className = 'conversation-item';
-        div.dataset.filename = f;
-        
-        // Try to load the conversation to get its name
-        try {
-            const convRes = await fetch('/load', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({filename: f})
-            });
-            const conv = await convRes.json();
-            
-            // Create name span
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'conv-name';
-            nameSpan.textContent = conv.name || generateChatName(conv.messages || []) || 'New Chat';
-            
-            // Create delete button
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'delete-conv-btn';
-            deleteBtn.innerHTML = '×';
-            deleteBtn.title = 'Delete conversation';
-            deleteBtn.onclick = (e) => deleteConversation(f, e);
-            
-            div.appendChild(nameSpan);
-            div.appendChild(deleteBtn);
-            
-            // Add click handler for loading conversation
-            div.addEventListener('click', (e) => {
-                // Don't load if clicking the delete button
-                if (!e.target.classList.contains('delete-conv-btn')) {
-                    // Remove active class from all items
-                    document.querySelectorAll('.conversation-item').forEach(item => {
-                        item.classList.remove('active');
-                    });
-                    div.classList.add('active');
-                    loadConversation(f);
-                }
-            });
-            
-        } catch (e) {
-            // Fallback to filename
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'conv-name';
-            nameSpan.textContent = f.replace(/^conv_|\.json$/g, '').replace(/_/g, ' ');
-            
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'delete-conv-btn';
-            deleteBtn.innerHTML = '×';
-            deleteBtn.onclick = (e) => deleteConversation(f, e);
-            
-            div.appendChild(nameSpan);
-            div.appendChild(deleteBtn);
-            
-            div.addEventListener('click', (e) => {
-                if (!e.target.classList.contains('delete-conv-btn')) {
-                    loadConversation(f);
-                }
-            });
-        }
-        
-        conversationsList.appendChild(div);
-    }
-}
-
-// Load a specific conversation
-async function loadConversation(filename) {
-    const res = await fetch('/load', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({filename})
-    });
-    const conv = await res.json();
-    messages = conv.messages || [];
-    systemPrompt = conv.system || '';
-    temperature = conv.temperature ?? temperature;
-    topP = conv.topP ?? topP;
-    maxTokens = conv.maxTokens ?? maxTokens;
-    
-    // Update UI
-    renderMessages();
-    systemTextarea.value = systemPrompt;
-    tempSlider.value = temperature;
-    tempSpan.textContent = temperature.toFixed(1);
-    topPSlider.value = topP;
-    topPSpan.textContent = topP.toFixed(2);
-    maxTokensInput.value = maxTokens;
+    localStorage.setItem('mallamaSettings', JSON.stringify(settings));
 }
 
 // Generate a chat name from the first user message
 function generateChatName(messages) {
-    // Find the first user message
     const firstUserMsg = messages.find(msg => msg.role === 'user');
     if (!firstUserMsg) return 'New Chat';
     
     const content = firstUserMsg.content.trim();
     if (!content) return 'New Chat';
     
-    // Take first 30 characters, add ellipsis if longer
     let name = content.length > 30 ? content.substring(0, 30) + '...' : content;
-    
-    // Remove newlines and extra spaces
     name = name.replace(/\s+/g, ' ').trim();
-    
     return name;
+}
+
+// Render messages with markdown
+function renderMessages() {
+    messagesContainer.innerHTML = '';
+    
+    messages.forEach((msg, idx) => {
+        const messageEl = document.createElement('div');
+        messageEl.className = `message ${msg.role}`;
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        
+        if (msg.content) {
+            // Use marked for markdown rendering
+            let html = marked.parse(msg.content);
+            bubble.innerHTML = html;
+            
+            // Add copy buttons to code blocks
+            bubble.querySelectorAll('pre').forEach(pre => {
+                if (!pre.querySelector('.copy-btn')) {
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.textContent = 'Copy';
+                    btn.onclick = () => {
+                        const code = pre.querySelector('code') || pre;
+                        navigator.clipboard.writeText(code.innerText || code.textContent);
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => btn.textContent = 'Copy', 2000);
+                    };
+                    pre.style.position = 'relative';
+                    pre.appendChild(btn);
+                }
+            });
+            
+            // Highlight code
+            bubble.querySelectorAll('pre code').forEach(block => {
+                hljs.highlightElement(block);
+            });
+        } else {
+            bubble.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+        }
+        
+        messageEl.appendChild(bubble);
+        messagesContainer.appendChild(messageEl);
+    });
+    
+    // Scroll to bottom smoothly
+    messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: 'smooth'
+    });
+}
+
+// Update streaming content efficiently
+function updateStreamingContent(token) {
+    if (messages.length === 0) return;
+    
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role !== 'assistant') return;
+    
+    lastMsg.content += token;
+    
+    // Update the last message bubble directly
+    const lastMsgDiv = messagesContainer.lastElementChild;
+    if (lastMsgDiv) {
+        const bubble = lastMsgDiv.querySelector('.bubble');
+        if (bubble) {
+            // Remove typing indicator if present
+            if (bubble.querySelector('.typing-indicator')) {
+                bubble.innerHTML = '';
+            }
+            
+            // Update with new content
+            let html = marked.parse(lastMsg.content);
+            bubble.innerHTML = html;
+            
+            // Add copy buttons
+            bubble.querySelectorAll('pre').forEach(pre => {
+                if (!pre.querySelector('.copy-btn')) {
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.textContent = 'Copy';
+                    btn.onclick = () => {
+                        const code = pre.querySelector('code') || pre;
+                        navigator.clipboard.writeText(code.innerText || code.textContent);
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => btn.textContent = 'Copy', 2000);
+                    };
+                    pre.style.position = 'relative';
+                    pre.appendChild(btn);
+                }
+            });
+            
+            // Highlight code
+            bubble.querySelectorAll('pre code').forEach(block => {
+                hljs.highlightElement(block);
+            });
+        }
+    }
+    
+    // Auto-scroll smoothly for better UX
+    messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: 'smooth'
+    });
+}
+
+// Load models
+async function loadModels() {
+    try {
+        const res = await fetch('/models');
+        const list = await res.json();
+        models = list;
+        modelSelect.innerHTML = '';
+        if (models.length === 0) {
+            modelSelect.innerHTML = '<option>no models</option>';
+        } else {
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                modelSelect.appendChild(opt);
+            });
+            currentModel = models[0];
+            modelSelect.value = currentModel;
+        }
+    } catch (e) { 
+        console.warn('no models', e);
+        modelSelect.innerHTML = '<option>Error loading models</option>';
+    }
+}
+
+// Load conversations list
+async function loadConversations() {
+    try {
+        const res = await fetch('/conversations');
+        const files = await res.json();
+        conversationsList = files;
+        
+        historyList.innerHTML = '';
+        
+        for (const filename of files) {
+            try {
+                const convRes = await fetch('/load', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({filename})
+                });
+                const conv = await convRes.json();
+                
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.dataset.filename = filename;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'chat-name';
+                nameSpan.textContent = conv.name || generateChatName(conv.messages || []) || filename.replace(/^conv_|\.json$/g, '').replace(/_/g, ' ');
+                
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-single';
+                delBtn.innerHTML = '<i class="fas fa-times"></i>';
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await deleteConversation(filename);
+                });
+                
+                item.appendChild(nameSpan);
+                item.appendChild(delBtn);
+                
+                item.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('delete-single') && !e.target.closest('.delete-single')) {
+                        loadConversation(filename);
+                    }
+                });
+                
+                historyList.appendChild(item);
+            } catch (e) {
+                // Fallback
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'chat-name';
+                nameSpan.textContent = filename.replace(/^conv_|\.json$/g, '').replace(/_/g, ' ');
+                
+                item.appendChild(nameSpan);
+                historyList.appendChild(item);
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load conversations', e);
+    }
+}
+
+// Load specific conversation
+async function loadConversation(filename) {
+    try {
+        const res = await fetch('/load', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({filename})
+        });
+        const conv = await res.json();
+        
+        messages = conv.messages || [];
+        systemPrompt = conv.system || '';
+        temperature = conv.temperature ?? temperature;
+        topP = conv.topP ?? topP;
+        maxTokens = conv.maxTokens ?? maxTokens;
+        
+        // Update UI
+        renderMessages();
+        systemPromptArea.value = systemPrompt;
+        tempSlider.value = temperature;
+        tempValue.textContent = temperature.toFixed(1);
+        topPSlider.value = topP;
+        topPValue.textContent = topP.toFixed(2);
+        maxTokensSelect.value = maxTokens;
+        
+        // Update active state in sidebar
+        document.querySelectorAll('.history-item').forEach(item => {
+            if (item.dataset.filename === filename) {
+                item.style.background = 'rgba(70, 100, 200, 0.3)';
+            } else {
+                item.style.background = '';
+            }
+        });
+    } catch (e) {
+        console.error('Failed to load conversation', e);
+    }
 }
 
 // Save current conversation
 async function saveConversation() {
-    // Don't save empty conversations
     if (messages.length === 0) return;
     
     const conv = {
@@ -246,192 +370,75 @@ async function saveConversation() {
         temperature,
         topP,
         maxTokens,
-        name: generateChatName(messages) // Add a name field
+        name: generateChatName(messages)
     };
     
-    await fetch('/save', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(conv)
-    });
-    loadConversations(); // refresh list
+    try {
+        await fetch('/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(conv)
+        });
+        loadConversations();
+    } catch (e) {
+        console.error('Failed to save conversation', e);
+    }
 }
 
-// Delete a single conversation
-async function deleteConversation(filename, event) {
-    event.stopPropagation(); // Prevent triggering the load conversation
-    
-    if (!confirm('Are you sure you want to delete this conversation?')) {
-        return;
-    }
+// Delete conversation
+async function deleteConversation(filename) {
+    const confirmed = await showConfirm('Delete ALL conversations? This cannot be undone.');
+    if (!confirmed) return;
     
     try {
-        const res = await fetch('/delete', {
+        await fetch('/delete', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({filename})
         });
         
-        if (res.ok) {
-            // If the deleted conversation is currently loaded, clear it
-            const currentConvFile = document.querySelector('.conversation-item.active')?.dataset.filename;
-            if (currentConvFile === filename) {
-                messages = [];
-                renderMessages();
-            }
-            loadConversations(); // Refresh the list
+        if (document.querySelector('.history-item.active')?.dataset.filename === filename) {
+            messages = [];
+            renderMessages();
         }
+        
+        loadConversations();
     } catch (e) {
-        console.error('Failed to delete conversation', e);
+        console.error('Failed to delete', e);
     }
 }
 
 // Delete all conversations
 async function deleteAllConversations() {
-    if (!confirm('Are you sure you want to delete ALL conversations? This cannot be undone.')) {
-        return;
-    }
+    const confirmed = await showConfirm('Delete ALL conversations? This cannot be undone.');
+    if (!confirmed) return;
     
     try {
-        const res = await fetch('/delete-all', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-        
-        if (res.ok) {
-            messages = [];
-            renderMessages();
-            loadConversations(); // Refresh the list
-        }
+        await fetch('/delete-all', { method: 'POST' });
+        messages = [];
+        renderMessages();
+        loadConversations();
     } catch (e) {
-        console.error('Failed to delete all conversations', e);
+        console.error('Failed to delete all', e);
     }
 }
 
-
-// Render messages with markdown and code highlighting
-function renderMessages() {
-    messagesDiv.innerHTML = '';
-    
-    messages.forEach(msg => {
-        const messageEl = document.createElement('div');
-        messageEl.className = `message ${msg.role}`;
-        
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'message-content';
-        
-        // Parse markdown
-        let html = simpleMarkdown(msg.content);
-        contentDiv.innerHTML = html;
-        
-        // Add copy buttons to code blocks
-        contentDiv.querySelectorAll('pre').forEach(pre => {
-            const btn = document.createElement('button');
-            btn.className = 'copy-btn';
-            btn.textContent = 'Copy';
-            btn.onclick = () => {
-                const code = pre.querySelector('code') || pre;
-                navigator.clipboard.writeText(code.innerText || code.textContent);
-                btn.textContent = 'Copied!';
-                setTimeout(() => btn.textContent = 'Copy', 2000);
-            };
-            pre.style.position = 'relative';
-            pre.appendChild(btn);
-        });
-        
-        messageEl.appendChild(contentDiv);
-        messagesDiv.appendChild(messageEl);
-    });
-    
-    // Apply Prism.js highlighting if available
-    if (typeof Prism !== 'undefined') {
-        Prism.highlightAll();
+// Stop generation
+function stopGeneration() {
+    if (abortController) {
+        abortController.abort();
+        abortController = null;
+        isGenerating = false;
+        sendIcon.style.display = 'block';
+        stopIcon.style.display = 'none';
+        sendStopBtn.classList.remove('stop-active');
+        fetch('/stop', { method: 'POST' }).catch(() => {});
     }
-    
-    // Scroll to bottom
-    const chatArea = document.querySelector('.chat-area');
-    if (chatArea) {
-        chatArea.scrollTop = chatArea.scrollHeight;
-    }
-}
-
-// Very basic markdown parser (bold, italic, code blocks, inline code)
-function simpleMarkdown(text) {
-    if (!text) return '';
-    
-    // First, escape HTML to prevent XSS
-    text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    
-    // Code blocks ```lang\ncode``` - with proper language support
-    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, language, code) => {
-        const lang = language || 'plaintext';
-        // Don't escape code inside pre tags as Prism will handle it
-        return `<pre><code class="language-${lang}">${code}</code></pre>`;
-    });
-    
-    // Inline code `code`
-    text = text.replace(/`([^`]+)`/g, '<code class="language-plaintext">$1</code>');
-    
-    // Headers
-    text = text.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-    text = text.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-    text = text.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-    
-    // Bold **text**
-    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    
-    // Italic *text*
-    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    
-    // Lists
-    text = text.replace(/^\s*\*\s(.*$)/gim, '<li>$1</li>');
-    text = text.replace(/^\s*-\s(.*$)/gim, '<li>$1</li>');
-    text = text.replace(/^\s*\d+\.\s(.*$)/gim, '<li>$1</li>');
-    
-    // Wrap lists
-    text = text.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-    
-    // Links [text](url)
-    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-    
-    // Blockquotes
-    text = text.replace(/^\>\s(.*$)/gim, '<blockquote>$1</blockquote>');
-    
-    // Horizontal rule
-    text = text.replace(/^\s*---\s*$/gim, '<hr>');
-    
-    // Paragraphs - wrap text not in block elements
-    const lines = text.split('\n');
-    let inBlock = false;
-    let result = [];
-    
-    for (let line of lines) {
-        // Check if line starts with HTML tag
-        if (line.trim().startsWith('<') && !line.trim().startsWith('<br>')) {
-            inBlock = true;
-            result.push(line);
-        } else if (inBlock && line.trim() === '') {
-            inBlock = false;
-            result.push(line);
-        } else if (!inBlock && line.trim() !== '') {
-            result.push(`<p>${line}</p>`);
-        } else {
-            result.push(line);
-        }
-    }
-    
-    text = result.join('\n');
-    
-    return text;
-}
-
-function escapeHtml(unsafe) {
-    return unsafe.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // Send message
 async function sendMessage() {
-    const text = userInput.value.trim();
+    const text = messageInput.value.trim();
     if (!text && uploadedFiles.length === 0) return;
     if (!currentModel) {
         alert('No model selected');
@@ -439,38 +446,36 @@ async function sendMessage() {
     }
 
     // Add user message
-    const userMsg = { role: 'user', content: text };
-    messages.push(userMsg);
+    messages.push({ role: 'user', content: text });
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+    
+    // Add empty assistant message
+    messages.push({ role: 'assistant', content: '' });
     renderMessages();
 
-    // Clear input
-    userInput.value = '';
-    uploadedFiles = []; // simple: forget uploaded files after sending
-
-    // Prepare assistant placeholder
-    const assistantMsg = { role: 'assistant', content: '' };
-    messages.push(assistantMsg);
-    renderMessages(); // will create empty assistant bubble
-
-    // Start streaming
+    // Start generating
     isGenerating = true;
-    sendBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20"><rect x="6" y="6" width="12" height="12"/></svg>';
-    sendBtn.classList.add('stop');
+    sendIcon.style.display = 'none';
+    stopIcon.style.display = 'block';
+    sendStopBtn.classList.add('stop-active');
 
     abortController = new AbortController();
+
+    const payload = {
+        model: currentModel,
+        messages: messages.slice(0, -1),
+        system: systemPrompt,
+        temperature: parseFloat(temperature),
+        top_p: parseFloat(topP),
+        max_tokens: parseInt(maxTokens, 10)
+    };
 
     try {
         const response = await fetch('/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: currentModel,
-                messages: messages.slice(0, -1), // exclude the empty assistant
-                system: systemPrompt,
-                temperature,
-                top_p: topP,
-                max_tokens: maxTokens
-            }),
+            body: JSON.stringify(payload),
             signal: abortController.signal
         });
 
@@ -482,7 +487,9 @@ async function sendMessage() {
             const { done, value } = await reader.read();
             if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+            
             const lines = buffer.split('\n\n');
             buffer = lines.pop() || '';
 
@@ -490,88 +497,43 @@ async function sendMessage() {
                 if (line.startsWith('data: ')) {
                     const data = line.slice(6);
                     if (data === '[DONE]') {
-                        break;
-                    }
-                    try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.token) {
-                            // Append token to last assistant message
-                            const last = messages[messages.length - 1];
-                            last.content += parsed.token;
-
-                            // Update UI efficiently: find last message element
-                            const lastMsgDiv = messagesDiv.lastElementChild;
-                            if (lastMsgDiv) {
-                                const contentDiv = lastMsgDiv.querySelector('.message-content');
-                                contentDiv.innerHTML = simpleMarkdown(last.content);
-                                
-                                // Add copy button to any new code blocks
-                                contentDiv.querySelectorAll('pre').forEach(pre => {
-                                    if (!pre.querySelector('.copy-btn')) {
-                                        const btn = document.createElement('button');
-                                        btn.className = 'copy-btn';
-                                        btn.textContent = 'Copy';
-                                        btn.onclick = () => {
-                                            const code = pre.querySelector('code') || pre;
-                                            navigator.clipboard.writeText(code.innerText || code.textContent);
-                                            btn.textContent = 'Copied!';
-                                            setTimeout(() => btn.textContent = 'Copy', 2000);
-                                        };
-                                        pre.style.position = 'relative';
-                                        pre.appendChild(btn);
-                                    }
-                                });
-                                
-                                // Re-highlight code blocks in this message
-                                if (typeof Prism !== 'undefined') {
-                                    contentDiv.querySelectorAll('pre code').forEach((block) => {
-                                        Prism.highlightElement(block);
-                                    });
-                                }
+                        // Done
+                    } else if (data.startsWith('ERROR:')) {
+                        console.error(data);
+                        stopGeneration();
+                    } else {
+                        try {
+                            const parsed = JSON.parse(data);
+                            if (parsed.token) {
+                                updateStreamingContent(parsed.token);
                             }
-
-                            // Auto-scroll
-                            const chatArea = document.querySelector('.chat-area');
-                            if (chatArea) {
-                                chatArea.scrollTop = chatArea.scrollHeight;
-                            }
+                        } catch (e) {
+                            // Ignore parse errors
                         }
-                    } catch (e) {
-                        console.warn('Failed to parse chunk', e);
                     }
                 }
             }
         }
     } catch (err) {
-        if (err.name === 'AbortError') {
-            console.log('Stream aborted');
-        } else {
+        if (err.name !== 'AbortError') {
             console.error('Stream error', err);
         }
     } finally {
         isGenerating = false;
-        sendBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
-        sendBtn.classList.remove('stop');
+        sendIcon.style.display = 'block';
+        stopIcon.style.display = 'none';
+        sendStopBtn.classList.remove('stop-active');
         abortController = null;
-        // Auto-save conversation
-        saveConversation();
+        
+        // Auto-save after generation
+        if (messages.length > 0 && messages[messages.length - 1].content) {
+            saveConversation();
+        }
     }
 }
 
-// Stop generation
-function stopGeneration() {
-    if (abortController) {
-        abortController.abort();
-        isGenerating = false;
-        sendBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
-        sendBtn.classList.remove('stop');
-        // Optionally notify backend
-        fetch('/stop', { method: 'POST' });
-    }
-}
-
-// UI event listeners
-sendBtn.addEventListener('click', () => {
+// Event listeners
+sendStopBtn.addEventListener('click', () => {
     if (isGenerating) {
         stopGeneration();
     } else {
@@ -579,10 +541,154 @@ sendBtn.addEventListener('click', () => {
     }
 });
 
-userInput.addEventListener('keydown', (e) => {
+messageInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
+    }
+});
+
+// Auto-resize textarea
+messageInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+});
+
+// Settings
+tempSlider.addEventListener('input', () => {
+    temperature = parseFloat(tempSlider.value);
+    tempValue.textContent = temperature.toFixed(1);
+    saveSettings();
+});
+
+topPSlider.addEventListener('input', () => {
+    topP = parseFloat(topPSlider.value);
+    topPValue.textContent = topP.toFixed(2);
+    saveSettings();
+});
+
+maxTokensSelect.addEventListener('change', (e) => {
+    maxTokens = parseInt(e.target.value, 10);
+    saveSettings();
+});
+
+systemPromptArea.addEventListener('input', () => {
+    systemPrompt = systemPromptArea.value;
+    saveSettings();
+});
+
+// Settings modal
+settingsBtn.addEventListener('click', () => {
+    systemPromptArea.value = systemPrompt;
+    tempSlider.value = temperature;
+    tempValue.textContent = temperature.toFixed(1);
+    topPSlider.value = topP;
+    topPValue.textContent = topP.toFixed(2);
+    maxTokensSelect.value = maxTokens;
+    settingsModal.classList.add('show');
+});
+
+closeSettingsBtn.addEventListener('click', () => {
+    settingsModal.classList.remove('show');
+});
+
+// Upload modal
+document.querySelector('.attach-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    uploadModal.classList.add('show');
+});
+
+closeUploadBtn.addEventListener('click', () => {
+    uploadModal.classList.remove('show');
+    filePreviews.innerHTML = '';
+});
+
+dropZone.addEventListener('click', () => fileInput.click());
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.style.background = 'rgba(100, 140, 255, 0.2)';
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.style.background = '';
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.style.background = '';
+    handleFiles(e.dataTransfer.files);
+});
+
+fileInput.addEventListener('change', () => {
+    handleFiles(fileInput.files);
+});
+
+async function handleFiles(files) {
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await fetch('/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            uploadedFiles.push(data);
+            
+            const preview = document.createElement('div');
+            preview.className = 'preview-item';
+            if (file.type.startsWith('image/')) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                preview.appendChild(img);
+            }
+            preview.appendChild(document.createTextNode(data.original));
+            filePreviews.appendChild(preview);
+        } catch (e) {
+            console.error('Upload failed', e);
+        }
+    }
+}
+
+// New chat
+newChatBtn.addEventListener('click', () => {
+    messages = [];
+    renderMessages();
+});
+
+// Model change
+modelSelect.addEventListener('change', () => {
+    currentModel = modelSelect.value;
+});
+
+// Delete all
+deleteAllBtn.addEventListener('click', deleteAllConversations);
+
+// Sidebar collapse
+burger.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    
+    // Mobile backdrop
+    if (window.innerWidth <= 700) {
+        if (!sidebar.classList.contains('collapsed')) {
+            if (!document.getElementById('sidebar-backdrop')) {
+                const backdrop = document.createElement('div');
+                backdrop.id = 'sidebar-backdrop';
+                backdrop.addEventListener('click', () => sidebar.classList.add('collapsed'));
+                document.querySelector('.app-container').appendChild(backdrop);
+            }
+        } else {
+            const backdrop = document.getElementById('sidebar-backdrop');
+            if (backdrop) backdrop.remove();
+        }
+    }
+});
+
+// Close modals when clicking outside
+window.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+        settingsModal.classList.remove('show');
+    }
+    if (e.target === uploadModal) {
+        uploadModal.classList.remove('show');
     }
 });
 
@@ -594,108 +700,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Temperature slider
-tempSlider.addEventListener('input', () => {
-    temperature = parseFloat(tempSlider.value);
-    tempSpan.textContent = temperature.toFixed(1);
-});
-topPSlider.addEventListener('input', () => {
-    topP = parseFloat(topPSlider.value);
-    topPSpan.textContent = topP.toFixed(2);
-});
-
-document.getElementById('max-tokens').addEventListener('change', (e) => {
-    maxTokens = parseInt(e.target.value, 10);
-});
-
-// Add delete all button event listener
-document.getElementById('delete-all-btn').addEventListener('click', deleteAllConversations);
-
-// System prompt modal
-systemBtn.addEventListener('click', () => {
-    systemTextarea.value = systemPrompt;
-    systemModal.style.display = 'flex';
-});
-systemClose.addEventListener('click', () => {
-    systemModal.style.display = 'none';
-});
-saveSystemBtn.addEventListener('click', () => {
-    systemPrompt = systemTextarea.value;
-    systemModal.style.display = 'none';
-});
-window.addEventListener('click', (e) => {
-    if (e.target === systemModal) systemModal.style.display = 'none';
-    if (e.target === uploadModal) uploadModal.style.display = 'none';
-});
-
-// Upload modal
-uploadBtn.addEventListener('click', () => {
-    uploadModal.style.display = 'flex';
-    filePreviews.innerHTML = '';
-});
-uploadClose.addEventListener('click', () => {
-    uploadModal.style.display = 'none';
-});
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.style.background = 'rgba(255,255,255,0.2)';
-});
-dropZone.addEventListener('dragleave', () => {
-    dropZone.style.background = '';
-});
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.style.background = '';
-    const files = e.dataTransfer.files;
-    handleFiles(files);
-});
-fileInput.addEventListener('change', () => {
-    handleFiles(fileInput.files);
-});
-
-async function handleFiles(files) {
-    for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch('/upload', { method: 'POST', body: formData });
-        const data = await res.json();
-        uploadedFiles.push(data);
-        // Show preview
-        const preview = document.createElement('div');
-        preview.className = 'preview-item';
-        if (file.type.startsWith('image/')) {
-            const img = document.createElement('img');
-            img.src = URL.createObjectURL(file);
-            preview.appendChild(img);
-        }
-        preview.appendChild(document.createTextNode(data.original));
-        filePreviews.appendChild(preview);
-    }
-}
-
-// New chat
-newChatBtn.addEventListener('click', () => {
-    messages = [];
-    renderMessages();
-    userInput.value = '';
-});
-
-// Model change
-modelSelect.addEventListener('change', () => {
-    currentModel = modelSelect.value;
-});
-
-// Function to manually trigger Prism highlighting on new content
-function highlightCodeBlocks(container) {
-    if (typeof Prism !== 'undefined') {
-        container.querySelectorAll('pre code').forEach((block) => {
-            Prism.highlightElement(block);
-        });
-    }
-}
-
-// Initial load
+// Initialize
+loadSettings();
 loadModels();
 loadConversations();
-loadSettings(); // Add this line
