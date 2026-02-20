@@ -146,7 +146,7 @@ function renderMessages() {
             // Add thinking section if it exists
             if (msg.thinking && msg.thinking.trim()) {
                 html += `<div class="thinking-block">`;
-                html += `<div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">`;
+                html += `<div class="thinking-header" data-thinking-toggle="true">`;
                 html += `<i class="fas fa-brain"></i> Thinking <span class="toggle-icon">▼</span>`;
                 html += `</div>`;
                 html += `<div class="thinking-content">${marked.parse(msg.thinking)}</div>`;
@@ -189,11 +189,15 @@ function renderMessages() {
         messagesContainer.appendChild(messageEl);
     });
     
-    // Scroll to bottom smoothly
-    messagesContainer.scrollTo({
-        top: messagesContainer.scrollHeight,
-        behavior: 'smooth'
-    });
+    // Only auto-scroll if user was already near the bottom
+    const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
+    
+    if (isNearBottom) {
+        messagesContainer.scrollTo({
+            top: messagesContainer.scrollHeight,
+            behavior: 'smooth'
+        });
+    }
 }
 
 function updateThinkingContent(token) {
@@ -234,6 +238,13 @@ function renderLastMessage() {
     const bubble = lastMsgDiv.querySelector('.bubble');
     if (!bubble) return;
     
+    // Store the collapsed state of thinking blocks before rerender
+    const existingThinkingBlocks = bubble.querySelectorAll('.thinking-block');
+    const collapsedStates = [];
+    existingThinkingBlocks.forEach(block => {
+        collapsedStates.push(block.classList.contains('collapsed'));
+    });
+    
     // Remove typing indicator if present
     if (bubble.querySelector('.typing-indicator')) {
         bubble.innerHTML = '';
@@ -245,7 +256,7 @@ function renderLastMessage() {
     // Add thinking section if it exists
     if (lastMsg.thinking && lastMsg.thinking.trim()) {
         html += `<div class="thinking-block">`;
-        html += `<div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">`;
+        html += `<div class="thinking-header" data-thinking-toggle="true">`;
         html += `<i class="fas fa-brain"></i> Thinking <span class="toggle-icon">▼</span>`;
         html += `</div>`;
         html += `<div class="thinking-content">${marked.parse(lastMsg.thinking)}</div>`;
@@ -258,6 +269,16 @@ function renderLastMessage() {
     }
     
     bubble.innerHTML = html;
+    
+    // Restore collapsed states
+    if (collapsedStates.length > 0) {
+        const newThinkingBlocks = bubble.querySelectorAll('.thinking-block');
+        newThinkingBlocks.forEach((block, index) => {
+            if (collapsedStates[index]) {
+                block.classList.add('collapsed');
+            }
+        });
+    }
     
     // Add copy buttons to code blocks
     bubble.querySelectorAll('pre').forEach(pre => {
@@ -281,11 +302,15 @@ function renderLastMessage() {
         hljs.highlightElement(block);
     });
     
-    // Auto-scroll smoothly
-    messagesContainer.scrollTo({
-        top: messagesContainer.scrollHeight,
-        behavior: 'smooth'
-    });
+    // Only auto-scroll if user was already near the bottom
+    const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
+    
+    if (isNearBottom) {
+        messagesContainer.scrollTo({
+            top: messagesContainer.scrollHeight,
+            behavior: 'smooth'
+        });
+    }
 }
 
 async function loadModels() {
@@ -834,6 +859,17 @@ document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'c' && isGenerating) {
         e.preventDefault();
         stopGeneration();
+    }
+});
+
+// Add event delegation for thinking block toggles
+document.addEventListener('click', function(e) {
+    const thinkingHeader = e.target.closest('[data-thinking-toggle="true"]');
+    if (thinkingHeader) {
+        const thinkingBlock = thinkingHeader.closest('.thinking-block');
+        if (thinkingBlock) {
+            thinkingBlock.classList.toggle('collapsed');
+        }
     }
 });
 
