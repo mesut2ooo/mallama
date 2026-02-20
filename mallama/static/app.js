@@ -679,8 +679,9 @@ async function sendMessage() {
         sendStopBtn.classList.remove('stop-active');
         abortController = null;
         
-        // Auto-save after every exchange
+    if (messages.length <= 2) { // Just user + assistant messages
         saveConversation();
+    }
     }
 }
 
