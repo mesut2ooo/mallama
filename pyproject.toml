@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mallama"
-version = "0.1.4"
+version = "0.2.1"
 description = "Browser UI for Ollama • Local LLM Interface • Web Chat Client for Local AI Models"
 readme = "README.md"
 authors = [
