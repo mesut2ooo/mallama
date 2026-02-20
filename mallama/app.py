@@ -177,12 +177,55 @@ def load_conversation():
         conversation = json.load(f)
     return jsonify(conversation)
 
-# Route: list saved conversations
+# app.py - Add/modify these functions
+
 @app.route('/conversations', methods=['GET'])
 def list_conversations():
-    files = [f for f in os.listdir(app.config['CONVERSATIONS_FOLDER']) if f.endswith('.json')]
-    files.sort(reverse=True)
+    """List conversations with their modification times"""
+    files = []
+    conv_dir = app.config['CONVERSATIONS_FOLDER']
+    
+    for f in os.listdir(conv_dir):
+        if f.endswith('.json'):
+            filepath = os.path.join(conv_dir, f)
+            stat = os.stat(filepath)
+            files.append({
+                'filename': f,
+                'modified': stat.st_mtime,  # Last modified timestamp
+                'created': stat.st_ctime     # Creation time (or last metadata change)
+            })
+    
+    # Sort by modified time (newest first)
+    files.sort(key=lambda x: x['modified'], reverse=True)
     return jsonify(files)
+
+# Add new route for renaming conversations
+@app.route('/rename', methods=['POST'])
+def rename_conversation():
+    """Rename a conversation file"""
+    data = request.json
+    filename = data.get('filename')
+    new_name = data.get('new_name')
+    
+    if not filename or not new_name:
+        return jsonify({'error': 'Missing filename or new name'}), 400
+    
+    filepath = os.path.join(app.config['CONVERSATIONS_FOLDER'], filename)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Load the conversation
+    with open(filepath, 'r') as f:
+        conversation = json.load(f)
+    
+    # Update the name
+    conversation['name'] = new_name.strip() or 'New Chat'
+    
+    # Save back to the same file
+    with open(filepath, 'w') as f:
+        json.dump(conversation, f, indent=2)
+    
+    return jsonify({'status': 'renamed', 'filename': filename})
 
 # Route: upload file
 @app.route('/upload', methods=['POST'])

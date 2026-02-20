@@ -349,64 +349,317 @@ async function loadModels() {
     }
 }
 
-// Load conversations list
+// app.js - Replace the existing loadConversations function with this:
+
+// Helper function to get time category based on modified timestamp
+function getTimeCategory(timestamp) {
+    const now = Date.now() / 1000; // Convert to seconds
+    const diffInSeconds = now - timestamp;
+    const diffInDays = diffInSeconds / (60 * 60 * 24);
+    
+    if (diffInDays < 1) {
+        return 'Today';
+    } else if (diffInDays < 7) {
+        return 'This Week';
+    } else if (diffInDays < 30) {
+        return 'This Month';
+    } else if (diffInDays < 365) {
+        return 'Older';
+    } else {
+        return 'Long Ago';
+    }
+}
+
+// Helper function to format date
+function formatDate(timestamp) {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffInDays === 0) {
+        return `Today, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (diffInDays === 1) {
+        return `Yesterday, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (diffInDays < 7) {
+        return `${date.toLocaleDateString([], { weekday: 'long' })}, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+        return date.toLocaleDateString([], { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+}
+
+// Load conversations list with time-based sections
 async function loadConversations() {
     try {
         const res = await fetch('/conversations');
-        const files = await res.json();
-        conversationsList = files;
+        const filesWithMeta = await res.json(); // Now returns array of objects with filename and modified
         
-        historyList.innerHTML = '';
+        conversationsList = filesWithMeta;
         
-        for (const filename of files) {
+        // Group conversations by time category
+        const grouped = {
+            'Today': [],
+            'This Week': [],
+            'This Month': [],
+            'Older': [],
+            'Long Ago': []
+        };
+        
+        // First, fetch all conversation details
+        for (const fileMeta of filesWithMeta) {
             try {
                 const convRes = await fetch('/load', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({filename})
+                    body: JSON.stringify({filename: fileMeta.filename})
                 });
                 const conv = await convRes.json();
                 
-                const item = document.createElement('div');
-                item.className = 'history-item';
-                item.dataset.filename = filename;
-                
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'chat-name';
-                nameSpan.textContent = conv.name || generateChatName(conv.messages || []) || filename.replace(/^conv_|\.json$/g, '').replace(/_/g, ' ');
-                
-                const delBtn = document.createElement('button');
-                delBtn.className = 'delete-single';
-                delBtn.innerHTML = '<i class="fas fa-times"></i>';
-                delBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    await deleteConversation(filename);
+                const category = getTimeCategory(fileMeta.modified);
+                grouped[category].push({
+                    ...fileMeta,
+                    name: conv.name || generateChatName(conv.messages || []) || 
+                          fileMeta.filename.replace(/^conv_|\.json$/g, '').replace(/_/g, ' '),
+                    messages: conv.messages
                 });
-                
-                item.appendChild(nameSpan);
-                item.appendChild(delBtn);
-                
-                item.addEventListener('click', (e) => {
-                    if (!e.target.classList.contains('delete-single') && !e.target.closest('.delete-single')) {
-                        loadConversation(filename);
-                    }
-                });
-                
-                historyList.appendChild(item);
             } catch (e) {
-                // Fallback
-                const item = document.createElement('div');
-                item.className = 'history-item';
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'chat-name';
-                nameSpan.textContent = filename.replace(/^conv_|\.json$/g, '').replace(/_/g, ' ');
-                
-                item.appendChild(nameSpan);
+                // Fallback if can't load details
+                const category = getTimeCategory(fileMeta.modified);
+                grouped[category].push({
+                    ...fileMeta,
+                    name: fileMeta.filename.replace(/^conv_|\.json$/g, '').replace(/_/g, ' '),
+                    messages: []
+                });
+            }
+        }
+        
+        // Render grouped history
+        historyList.innerHTML = '';
+        
+        // Define the order of categories
+        const categoryOrder = ['Today', 'This Week', 'This Month', 'Older', 'Long Ago'];
+        
+        for (const category of categoryOrder) {
+            const conversations = grouped[category];
+            if (conversations.length === 0) continue;
+            
+            // Add category header
+            const categoryHeader = document.createElement('div');
+            categoryHeader.className = 'history-category';
+            categoryHeader.innerHTML = `
+                <div class="category-header">
+                    <span>${category}</span>
+                    <span class="category-count">${conversations.length}</span>
+                </div>
+            `;
+            historyList.appendChild(categoryHeader);
+            
+            // Add conversations in this category
+            for (const conv of conversations) {
+                const item = createHistoryItem(conv);
                 historyList.appendChild(item);
             }
         }
     } catch (e) {
         console.error('Failed to load conversations', e);
+    }
+}
+
+// Helper function to create history item
+function createHistoryItem(conv) {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.dataset.filename = conv.filename;
+    item.dataset.modified = conv.modified;
+    
+    // Main content container
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'history-item-content';
+    
+    // Name container (for editing)
+    const nameContainer = document.createElement('div');
+    nameContainer.className = 'chat-name-container';
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'chat-name';
+    nameSpan.textContent = conv.name;
+    
+    // Date badge
+    const dateBadge = document.createElement('span');
+    dateBadge.className = 'chat-date-badge';
+    dateBadge.textContent = formatDate(conv.modified);
+    
+    // Actions container
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'history-item-actions';
+    
+    // Edit button
+    const editBtn = document.createElement('button');
+    editBtn.className = 'edit-single';
+    editBtn.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+    editBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await startRename(item, nameSpan, conv.filename, conv.name);
+    });
+    
+    // Delete button
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete-single';
+    delBtn.innerHTML = '<i class="fas fa-times"></i>';
+    delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await deleteConversation(conv.filename);
+    });
+    
+    // Assemble
+    nameContainer.appendChild(nameSpan);
+    nameContainer.appendChild(dateBadge);
+    
+    actionsDiv.appendChild(editBtn);
+    actionsDiv.appendChild(delBtn);
+    
+    contentDiv.appendChild(nameContainer);
+    contentDiv.appendChild(actionsDiv);
+    
+    item.appendChild(contentDiv);
+    
+    item.addEventListener('click', (e) => {
+        if (!e.target.closest('.history-item-actions')) {
+            loadConversation(conv.filename);
+        }
+    });
+    
+    return item;
+}
+
+// Rename functionality
+async function startRename(item, nameSpan, filename, currentName) {
+    // Create input field
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rename-input';
+    input.value = currentName;
+    input.maxLength = 100;
+    
+    // Replace name span with input
+    const nameContainer = nameSpan.parentNode;
+    nameContainer.replaceChild(input, nameSpan);
+    input.focus();
+    input.select();
+    
+    // Handle save on Enter or blur
+    const saveRename = async () => {
+        const newName = input.value.trim() || 'New Chat';
+        
+        try {
+            const response = await fetch('/rename', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename, new_name: newName})
+            });
+            
+            if (response.ok) {
+                // Update UI
+                const newNameSpan = document.createElement('span');
+                newNameSpan.className = 'chat-name';
+                newNameSpan.textContent = newName;
+                nameContainer.replaceChild(newNameSpan, input);
+                
+                // Update active state if this is the active chat
+                const activeItem = document.querySelector('.history-item.active');
+                if (activeItem && activeItem.dataset.filename === filename) {
+                    // Update any displayed name elsewhere if needed
+                }
+            } else {
+                // Revert on error
+                nameContainer.replaceChild(nameSpan, input);
+            }
+        } catch (e) {
+            console.error('Failed to rename', e);
+            nameContainer.replaceChild(nameSpan, input);
+        }
+    };
+    
+    input.addEventListener('blur', saveRename);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            // Cancel editing
+            nameContainer.replaceChild(nameSpan, input);
+        }
+    });
+}
+
+// Update the saveConversation function to refresh the modified time
+async function saveConversation() {
+    if (messages.length === 0) return;
+    
+    const activeItem = document.querySelector('.history-item.active, .history-item[style*="background"]');
+    let filename = activeItem?.dataset.filename;
+    
+    const conv = {
+        messages,
+        system: systemPrompt,
+        model: currentModel,
+        temperature,
+        topP,
+        maxTokens,
+        name: generateChatName(messages)
+    };
+    
+    try {
+        if (filename) {
+            // Update existing conversation
+            await fetch('/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename})
+            });
+            
+            const response = await fetch('/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(conv)
+            });
+            
+            const result = await response.json();
+            
+            if (activeItem) {
+                activeItem.dataset.filename = result.filename;
+            }
+        } else {
+            // New conversation
+            const response = await fetch('/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(conv)
+            });
+            
+            const result = await response.json();
+        }
+        
+        // Refresh the history list
+        await loadConversations();
+        
+        // Re-apply active state
+        if (filename || activeItem) {
+            setTimeout(() => {
+                const newActiveItem = document.querySelector(`.history-item[data-filename="${filename || activeItem?.dataset.filename}"]`);
+                if (newActiveItem) {
+                    newActiveItem.classList.add('active');
+                    newActiveItem.style.background = 'rgba(70, 100, 200, 0.3)';
+                }
+            }, 100);
+        }
+    } catch (e) {
+        console.error('Failed to save conversation', e);
     }
 }
 
@@ -450,80 +703,6 @@ async function loadConversation(filename) {
         });
     } catch (e) {
         console.error('Failed to load conversation', e);
-    }
-}
-
-// Save current conversation
-async function saveConversation() {
-    if (messages.length === 0) return;
-    
-    // Check if we're currently viewing an existing conversation
-    const activeItem = document.querySelector('.history-item[style*="background"], .history-item.active');
-    let filename = activeItem?.dataset.filename;
-    
-    const conv = {
-        messages,
-        system: systemPrompt,
-        model: currentModel,
-        temperature,
-        topP,
-        maxTokens,
-        name: generateChatName(messages)
-    };
-    
-    try {
-        let url = '/save';
-        // If we have an existing filename, include it to update instead of create new
-        if (filename) {
-            // For updating existing conversation, we need to send the filename
-            // But the /save endpoint doesn't accept filename in the request body
-            // So we need to use a different approach - DELETE the old one and save new
-            
-            // First, delete the old conversation file
-            await fetch('/delete', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({filename})
-            });
-            
-            // Then save as new (will create with new filename)
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(conv)
-            });
-            
-            const result = await response.json();
-            
-            // Update the active item's dataset with new filename
-            if (activeItem) {
-                activeItem.dataset.filename = result.filename;
-            }
-        } else {
-            // New conversation - just save
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(conv)
-            });
-            
-            const result = await response.json();
-        }
-        
-        // Refresh the history list
-        await loadConversations();
-        
-        // Re-apply active state to the correct item
-        if (filename || activeItem) {
-            setTimeout(() => {
-                const newActiveItem = document.querySelector(`.history-item[data-filename="${filename || activeItem?.dataset.filename}"]`);
-                if (newActiveItem) {
-                    newActiveItem.style.background = 'rgba(70, 100, 200, 0.3)';
-                }
-            }, 100);
-        }
-    } catch (e) {
-        console.error('Failed to save conversation', e);
     }
 }
 
