@@ -3,8 +3,6 @@
 **Mallama** is a lightweight, self-hosted web UI for running local LLMs with **Ollama**.  
 It’s designed to be simple, fast, and hackable. No cloud. No accounts. Your models, your machine.
 
-![Mallama UI](./images/screenshot1.png)
-
 ---
 
 ## ✨ Features
@@ -16,7 +14,9 @@ It’s designed to be simple, fast, and hackable. No cloud. No accounts. Your mo
 - 🧪 Designed for experimentation and extension
 - 🐧 Linux-friendly, self-hosted by default
 
+![Mallama UI](./images/screenshot1.png)
 ![Chat View](./images/screenshot2.png)
+![Settings](./images/screenshot3.png)
 
 ---
 
