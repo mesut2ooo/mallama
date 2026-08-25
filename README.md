@@ -32,10 +32,10 @@ It’s designed to be simple, fast, and hackable. No cloud. No accounts. Your mo
 git clone https://github.com/mesut2ooo/mallama.git
 cd mallama
 ```
-or
+and
 ```python
 pip install -r requirements.txt
-python app.py
+python -m mallama
 ```
 
 Then open your browser at:
